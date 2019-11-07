@@ -1,10 +1,11 @@
 import base64
 import hashlib
 import threading
+import constants
 
 class WebConnection(threading.Thread):
     # Array of frames
-    self.data_array = []
+    data_array = []
 
     def __init__(self, connection, sourceAddress):
         threading.Thread.__init__(self)
@@ -21,13 +22,20 @@ class WebConnection(threading.Thread):
         self._connection.send(bytes(self.getHandshakeResponse(handshakeRequest), 'utf-8'))
 
         while True:
-            data = self.parseFrame(self._connection.recv(2**32 - 1))
+            data = self.parseFrame(self._connection.recv(FRAME_SIZE))
             if not data:
                 break
             data['payload'] = self.unmaskPayload(data['mask'], data['payload'])
             # Handle multiple frames.
             self.data_array.append(data)
             print(data)
+            if (data['opCode'] == PING):
+                # Send PONG Frame
+                self._connection.send(buildFrame(handlePINGFrame(data)))
+            elif (data['opCode'] == CLOSE):
+                # Stop the connection
+                self.join()
+                break
 
     def parseHandshake(self, data):
         data = data.decode('utf-8')
@@ -83,25 +91,38 @@ class WebConnection(threading.Thread):
     def parseFrame(self, data):
         bytePointer = 0
 
+        # Bit-0: FIN
         fin = data[bytePointer] >> 7
-        opCode = data[bytePointer] & 15
-        bytePointer += 1
+        # Bit-1 until Bit-3: EMPTY
+        # Bit-4 until Bit-7: OPCODE
+        opCode = int(data[bytePointer] & 15)
 
+        bytePointer += 1
+        # Bit-8: MASK
         useMask = data[bytePointer] >> 7
+        # Bit-9 until Bit-15: LENGTH
         length = int(data[bytePointer] & 127)
+        
         bytePointer += 1
 
         if length == 126:
+            #Bit-16 until Bit-23: EXTENDED LENGTH
             length = int(data[bytePointer]) << 8
+
             bytePointer += 1
+
+            #Bit-24 until Bit-31: EXTENDED LENGTH
             length += int(data[bytePointer])
+
             bytePointer += 1
+        #EVEN MORE EXTENDED LENGTH
         elif length == 127:
             for i in range(0, 8):
                 if i == 7:
                     length = int(data[bytePointer])
                 else:
                     length = length << 8 + int(data[bytePointer])
+
                 bytePointer += 1
         
         mask = 0
@@ -118,7 +139,7 @@ class WebConnection(threading.Thread):
             'useMask': useMask,
             'length': length,
             'mask': mask,
-            'payload': payload,
+            'payload': payload
         }
 
     def buildFrame(self, frameDict):
@@ -143,8 +164,17 @@ class WebConnection(threading.Thread):
         combinedPayload = bytearray()
         for data in self.data_array:
             combinedPayload.append(data['payload'])
-
         return combinedPayload
-        
+    
+    # These are control frame functions:
+    # All control frames MUST have a payload length of 125 bytes or less and MUST NOT be fragmented
+    def handlePINGFrame(self, frameDict):
+        # Send PONG
+        pongFrameDict = frameDict
+        pongFrameDict['opCode'] = PONG
+        pongFrameDict['fin'] = 0
+        pongFrameDict['useMask'] = 0
+        pongFrameDict['mask'] = 0
+        return pongFrameDict
 
 

@@ -1,6 +1,7 @@
 import connection
 import socket
 import threading
+import constants
 
 def accepting(incomingConnection, incomingAddress):
     print('Entered')
@@ -14,7 +15,7 @@ def accepting(incomingConnection, incomingAddress):
 
 print('Starting...')
 serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serverSocket.bind(('localhost', 65000))
+serverSocket.bind(('localhost', PORT))
 serverSocket.listen()
 
 while True:
