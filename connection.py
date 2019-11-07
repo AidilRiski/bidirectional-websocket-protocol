@@ -3,6 +3,8 @@ import hashlib
 import threading
 
 class WebConnection(threading.Thread):
+    # Array of frames
+    self.data_array = []
 
     def __init__(self, connection, sourceAddress):
         threading.Thread.__init__(self)
@@ -23,6 +25,8 @@ class WebConnection(threading.Thread):
             if not data:
                 break
             data['payload'] = self.unmaskPayload(data['mask'], data['payload'])
+            # Handle multiple frames.
+            self.data_array.append(data)
             print(data)
 
     def parseHandshake(self, data):
@@ -134,6 +138,13 @@ class WebConnection(threading.Thread):
 
         payloadData.append(frameDict['payload'])
         return payloadData
+
+    def combineData(self):
+        combinedPayload = bytearray()
+        for data in self.data_array:
+            combinedPayload.append(data['payload'])
+
+        return combinedPayload
         
 
 
