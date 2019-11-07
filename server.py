@@ -1,3 +1,4 @@
+import connection
 import socket
 import threading
 
@@ -18,10 +19,14 @@ serverSocket.listen()
 
 while True:
     print("Trying")
+    incomingConnection = None
+    incomingAddress = None
     try:
         incomingConnection, incomingAddress = serverSocket.accept()
     except Exception:
         print("Closing Server...")
         break
     print('Entering')
-    threading.Thread(target = accepting, args = (incomingConnection, incomingAddress)).start()
+    # threading.Thread(target = accepting, args = (incomingConnection, incomingAddress)).start()
+    connectionThread = connection.WebConnection(incomingConnection, incomingAddress)
+    connectionThread.start()
