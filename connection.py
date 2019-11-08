@@ -2,6 +2,7 @@ import base64
 import hashlib
 import threading
 from constants import *
+from utils import *
 
 class WebConnection(threading.Thread):
     # Array of frames
@@ -149,16 +150,22 @@ class WebConnection(threading.Thread):
 
         finOpcodeByte = frameDict['fin'] << 7 | (frameDict['opCode'] & 0x0f)
         payloadData.append(finOpcodeByte)
-
-        maskLengthByte = frameDict['useMask'] << 7 | (frameDict['length'] & 0x7f)
+        
+        
+        if frameDict['length'] < 126:
+            maskLengthByte = frameDict['useMask'] << 7 | (frameDict['length'] & 0x7f)
+        elif frameDict['length'] < 65536:
+            maskLengthByte = frameDict['useMask'] << 7 | (126 & 0x7f)
+        else:
+            maskLengthByte = frameDict['useMask'] << 7 | (127 & 0x7f)
         payloadData.append(maskLengthByte)
         
-        if frameDict['length'] > 126 and frameDict['length'] < 65536:
-            payloadData.append(bytes(126))
-            payloadData.append(frameDict['length'].to_bytes(2, 'little'))
-        elif frameDict['length'] > 65535:
-            payloadData.append(bytes(127))
-            payloadData.append(frameDict['length'].to_bytes(8, 'little'))
+        # if frameDict['length'] > 126 and frameDict['length'] < 65536:
+        #     payloadData.append(126 & 0xff)
+        #     payloadData.append(frameDict['length'].to_bytes(2, 'little'))
+        # elif frameDict['length'] > 65535:
+        #     payloadData.append(127 & 0xff)
+        #     payloadData.append(frameDict['length'].to_bytes(8, 'little'))
 
         payloadData.extend(frameDict['payload'])
         return payloadData
@@ -190,10 +197,21 @@ class WebConnection(threading.Thread):
     def isEchoRequest(self, payload):
         return payload[0] == 0x21 and payload[1] == 0x65 and payload[2] == 0x63 and payload[3] == 0x68 and payload[4] == 0x6f and payload[5] == 0x20 
 
+    def isSubmissionRequest(self, payload):
+        return payload[0] == 0x21 and payload[1] == 0x73 and payload[2] == 0x75 and payload[3] == 0x62 and payload[4] == 0x6d and payload[5] == 0x69 and payload[6] == 0x73 and payload[7] == 0x73 and payload[8] == 0x69 and payload[9] == 0x6f and payload[10] == 0x6e
+    
+    def isCheckRequest(self, payload):
+        return payload[0] == 0x21 and payload[1] == 0x63 and payload[2] == 0x68 and payload[3] == 0x65 and payload[4] == 0x63 and payload[5] == 0x6b
+
     def handleRequest(self, data):
         if (self.isEchoRequest(data['payload'])):
             print('Respoding with frame', self.createEchoResponse(data))
             self._connection.send(self.buildFrame(self.createEchoResponse(data)))
+        elif (self.isSubmissionRequest(data['payload'])):
+            zipCurrentFiles()
+            self.createSubmissionResponse()
+            print('Respoding with frame', self.createSubmissionResponse())
+            self._connection.send(self.buildFrame(self.createSubmissionResponse()))
     
     def createEchoResponse(self, data):
         
@@ -208,6 +226,28 @@ class WebConnection(threading.Thread):
             'opCode': 1,
             'useMask': 0,
             'length': data['length'] - 6,
+            'mask': 0,
+            'payload': payload
+        }
+    
+    def createSubmissionResponse(self):
+
+        payload = bytearray()
+        currentDirectory = os.getcwd()
+        fileNamePath = currentDirectory + '/' + FILE_NAME + '.zip'
+        with open(fileNamePath, 'rb') as binary_file:
+            while True:
+                byte = binary_file.read(1)
+                if byte == b"":
+                    break
+                payload.extend(byte)
+        
+        # print(payload)
+        return {
+            'fin': 1,
+            'opCode': 2,
+            'useMask': 0,
+            'length': os.path.getsize(fileNamePath),
             'mask': 0,
             'payload': payload
         }
