@@ -151,7 +151,6 @@ class WebConnection(threading.Thread):
         finOpcodeByte = frameDict['fin'] << 7 | (frameDict['opCode'] & 0x0f)
         payloadData.append(finOpcodeByte)
         
-        
         if frameDict['length'] < 126:
             maskLengthByte = frameDict['useMask'] << 7 | (frameDict['length'] & 0x7f)
         elif frameDict['length'] < 65536:
@@ -159,14 +158,7 @@ class WebConnection(threading.Thread):
         else:
             maskLengthByte = frameDict['useMask'] << 7 | (127 & 0x7f)
         payloadData.append(maskLengthByte)
-        
-        # if frameDict['length'] > 126 and frameDict['length'] < 65536:
-        #     payloadData.append(126 & 0xff)
-        #     payloadData.append(frameDict['length'].to_bytes(2, 'little'))
-        # elif frameDict['length'] > 65535:
-        #     payloadData.append(127 & 0xff)
-        #     payloadData.append(frameDict['length'].to_bytes(8, 'little'))
-
+    
         payloadData.extend(frameDict['payload'])
         return payloadData
 
@@ -212,6 +204,10 @@ class WebConnection(threading.Thread):
             self.createSubmissionResponse()
             print('Respoding with frame', self.createSubmissionResponse())
             self._connection.send(self.buildFrame(self.createSubmissionResponse()))
+        elif (self.isCheckRequest(data['payload'])):
+            self.createCheckResponse(data)
+            print('Respoding with frame', self.createCheckResponse(data))
+            self._connection.send(self.buildFrame(self.createCheckResponse(data)))
     
     def createEchoResponse(self, data):
         
@@ -248,6 +244,32 @@ class WebConnection(threading.Thread):
             'opCode': 2,
             'useMask': 0,
             'length': os.path.getsize(fileNamePath),
+            'mask': 0,
+            'payload': payload
+        }
+
+    def createCheckResponse(self, data):
+
+        bytePointer = 7
+
+        payload = bytearray()
+        hashPayload = ''
+
+        for i in range(0, data['length'] - 7):
+            hashPayload += str(chr(data['payload'][bytePointer]))
+            bytePointer += 1
+        
+        print(hashPayload)
+        if (compareHashes(hashPayload, generateChecksum())):
+            payload.extend('1'.encode('utf-8'))
+        else:
+            payload.append('0'.encode('utf-8'))
+
+        return {
+            'fin': 1,
+            'opCode': 1,
+            'useMask': 0,
+            'length': 1,
             'mask': 0,
             'payload': payload
         }

@@ -1,34 +1,29 @@
 import os
 import shutil
+import hashlib
 from constants import *
 
 def zipCurrentFiles():
     currentDirectory = os.getcwd()
     shutil.make_archive(FILE_NAME, 'zip', currentDirectory)
 
-# Readfile reads the file and returns bytearray to be parsed
-def readFile():
-    payload = bytearray()
+def generateChecksum():
     currentDirectory = os.getcwd()
     fileNamePath = currentDirectory + '/' + FILE_NAME + '.zip'
-    with open(fileNamePath, 'rb') as binary_file:
-        while True:
-            byte = binary_file.read(1)
-            if byte == b"":
-                break
-            # print(byte)
-            payload.extend(byte)
-            # payload.append(byte.to_bytes(1, 'little'))
-    # print(payload)
-    print(os.path.getsize(fileNamePath))
+    hash_md5 = hashlib.md5()
+    with open(fileNamePath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
+def compareHashes(hashClient, hashServer):
+    return hashClient.lower() == hashServer.lower()
 
-    payload.append(126)
-    print(payload[50876])
-    # return data
 def test():
-    payload = bytearray()
-    payload.append(50000 & 0xffff)
+    test = bytearray()
+    test.extend('1'.encode('utf-8'))
+    print(test)
 
-# zipCurrentFiles()
-readFile()
+# print(generateChecksum('A4A531314723D98E86945D683E703791', 'a4a531314723d98e86945d683e703791'))
+# print(compareHashes())
+test()
