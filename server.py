@@ -1,7 +1,7 @@
 import connection
 import socket
 import threading
-import constants
+from constants import *
 
 def accepting(incomingConnection, incomingAddress):
     print('Entered')
