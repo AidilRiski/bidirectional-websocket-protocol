@@ -6,7 +6,7 @@ from utils import *
 
 class WebConnection(threading.Thread):
     # Array of frames
-    dataArray = []
+    # dataArray = []
 
     def __init__(self, connection, sourceAddress, threadNum):
         threading.Thread.__init__(self)
@@ -14,6 +14,7 @@ class WebConnection(threading.Thread):
         self._sourceAddress = sourceAddress
         print('Entering thread', threadNum)
         self._threadNum = threadNum
+        self._dataArray = []
 
     def run(self):        
         data = self._connection.recv(FRAME_SIZE)
@@ -40,7 +41,7 @@ class WebConnection(threading.Thread):
             data['payload'] = self.unmaskPayload(data['mask'], data['payload'])
 
             # Handle multiple frames.
-            self.dataArray.append(data)
+            self._dataArray.append(data)
 
             dataToPrint = data.copy()
             if len(dataToPrint['payload']) > 100:
@@ -187,13 +188,13 @@ class WebConnection(threading.Thread):
 
     def combineData(self):
         combinedPayload = bytearray()
-        for data in self.dataArray:
+        for data in self._dataArray:
             combinedPayload.extend(data['payload'])
         return combinedPayload
     
     def combineFrame(self):
         combinedPayload = self.combineData()
-        bigFrame = self.dataArray[len(self.dataArray) - 1]
+        bigFrame = self._dataArray[len(self._dataArray) - 1]
         bigFrame['payload'] = combinedPayload
         bigFrame['length'] = len(bigFrame['payload'])
         return bigFrame
@@ -230,10 +231,10 @@ class WebConnection(threading.Thread):
         if (data['fin'] == 0):
             return
 
-        print('Data array: ', self.dataArray)
+        # print('Data array: ', self._dataArray)
         bigFrame = self.combineFrame()
-        self.dataArray = []
-        print('Data array2: ', self.dataArray)
+        self._dataArray = []
+        # print('Data array2: ', self._dataArray)
         
         if (self.isEchoRequest(bigFrame['payload'])):
             toPrint = self.createEchoResponse(bigFrame)

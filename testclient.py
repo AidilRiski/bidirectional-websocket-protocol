@@ -29,7 +29,7 @@ from websocket import create_connection
 url = "ws://localhost:" + str(PORT)
 ws = create_connection(url)
 print("Sending 'Hello, World'...")
-ws.send("!echo ABC")
+ws.send("!echo HALO...")
 print("Sent")
 print("Receiving...")
 result =  ws.recv()
