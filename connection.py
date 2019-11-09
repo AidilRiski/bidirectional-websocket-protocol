@@ -10,6 +10,7 @@ class WebConnection(threading.Thread):
 
     def __init__(self, connection, sourceAddress):
         threading.Thread.__init__(self)
+        print(threading.get_ident())
         self._connection = connection
         self._sourceAddress = sourceAddress
 
@@ -24,6 +25,8 @@ class WebConnection(threading.Thread):
 
         while True:
             buffer = self._connection.recv(FRAME_SIZE)
+            if (buffer == b''):
+                break
 
             # Check Validity of Received
             rawOP = buffer[0] & 0x0f
@@ -40,7 +43,8 @@ class WebConnection(threading.Thread):
 
             dataToPrint = data.copy()
             if len(dataToPrint['payload']) > 100:
-                dataToPrint['payload'] = 'TOO LONG TO PRINT'
+                dataToPrint['payload'] = 'TOO LONG TO PRINT, PROBABLY ...'
+
             print('Receiving', dataToPrint)
             if (data['opCode'] == PING):
                 # Send PONG Frame
@@ -216,16 +220,18 @@ class WebConnection(threading.Thread):
     def isSubmissionRequest(self, payload):
         return payload[0] == 0x21 and payload[1] == 0x73 and payload[2] == 0x75 and payload[3] == 0x62 and payload[4] == 0x6d and payload[5] == 0x69 and payload[6] == 0x73 and payload[7] == 0x73 and payload[8] == 0x69 and payload[9] == 0x6f and payload[10] == 0x6e
     
-    def isCheckRequest(self, payload):
-        return payload[0] == 0x21 and payload[1] == 0x63 and payload[2] == 0x68 and payload[3] == 0x65 and payload[4] == 0x63 and payload[5] == 0x6b
+    # def isCheckRequest(self, payload):
+    #     return payload[0] == 0x21 and payload[1] == 0x63 and payload[2] == 0x68 and payload[3] == 0x65 and payload[4] == 0x63 and payload[5] == 0x6b
  
     def handleRequest(self, data):
 
-        if (not data['fin']):
+        if (data['fin'] == 0):
             return
 
+        print('Data array: ', self.dataArray)
         bigFrame = self.combineFrame()
         self.dataArray = []
+        print('Data array2: ', self.dataArray)
         
         if (self.isEchoRequest(bigFrame['payload'])):
             toPrint = self.createEchoResponse(bigFrame)
@@ -237,13 +243,13 @@ class WebConnection(threading.Thread):
         elif (self.isSubmissionRequest(bigFrame['payload'])):
 
             zipCurrentFiles()
-            print('Respoding with frame', self.createSubmissionResponse())
+            print('Respoding with frame FILE')
             self._connection.send(self.buildFrame(self.createSubmissionResponse()))
 
-        elif (self.isCheckRequest(bigFrame['payload'])):
+        else:
 
-            print('Respoding with frame', self.createCheckResponse(bigFrame))
-            self._connection.send(self.buildFrame(self.createCheckResponse(bigFrame)))
+            print('Respoding with frame', self.createHashResponse(bigFrame))
+            self._connection.send(self.buildFrame(self.createHashResponse(bigFrame)))
     
     def createEchoResponse(self, data):
         
@@ -283,18 +289,15 @@ class WebConnection(threading.Thread):
             'payload': payload
         }
 
-    def createCheckResponse(self, data):
-
-        bytePointer = 7
+    def createHashResponse(self, data):
 
         payload = bytearray()
-        hashPayload = ''
+        clientHash = generateChecksumFromData(data['payload'])
+        serverHash = generateChecksumFromFile()
 
-        for i in range(0, data['length'] - 7):
-            hashPayload += str(chr(data['payload'][bytePointer]))
-            bytePointer += 1
-        
-        if (compareHashes(hashPayload, generateChecksum())):
+        print('clientHash: ', clientHash)
+        print('serverHash: ', serverHash)
+        if (compareHashes(clientHash, serverHash)):
             payload.extend('1'.encode('utf-8'))
         else:
             payload.extend('0'.encode('utf-8'))
