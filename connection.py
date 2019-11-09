@@ -14,7 +14,7 @@ class WebConnection(threading.Thread):
         self._sourceAddress = sourceAddress
 
     def run(self):        
-        data = self._connection.recv(2**32 - 1)
+        data = self._connection.recv(FRAME_SIZE)
         handshakeRequest = self.parseHandshake(data)
         if handshakeRequest is None:
             self._connection.send(bytes(self.getDenyHandshakeResponse(), 'utf-8'))
@@ -153,11 +153,15 @@ class WebConnection(threading.Thread):
         
         if frameDict['length'] < 126:
             maskLengthByte = frameDict['useMask'] << 7 | (frameDict['length'] & 0x7f)
+            payloadData.append(maskLengthByte)
         elif frameDict['length'] < 65536:
             maskLengthByte = frameDict['useMask'] << 7 | (126 & 0x7f)
+            payloadData.append(maskLengthByte)
+            payloadData.extend(frameDict['length'].to_bytes(2, 'big'))
         else:
             maskLengthByte = frameDict['useMask'] << 7 | (127 & 0x7f)
-        payloadData.append(maskLengthByte)
+            payloadData.append(maskLengthByte)
+            payloadData.extend(frameDict['length'].to_bytes(8, 'big'))
     
         payloadData.extend(frameDict['payload'])
         return payloadData
@@ -194,18 +198,22 @@ class WebConnection(threading.Thread):
     
     def isCheckRequest(self, payload):
         return payload[0] == 0x21 and payload[1] == 0x63 and payload[2] == 0x68 and payload[3] == 0x65 and payload[4] == 0x63 and payload[5] == 0x6b
-
+ 
     def handleRequest(self, data):
+        
         if (self.isEchoRequest(data['payload'])):
+
             print('Respoding with frame', self.createEchoResponse(data))
             self._connection.send(self.buildFrame(self.createEchoResponse(data)))
+
         elif (self.isSubmissionRequest(data['payload'])):
+
             zipCurrentFiles()
-            self.createSubmissionResponse()
             print('Respoding with frame', self.createSubmissionResponse())
             self._connection.send(self.buildFrame(self.createSubmissionResponse()))
+
         elif (self.isCheckRequest(data['payload'])):
-            self.createCheckResponse(data)
+
             print('Respoding with frame', self.createCheckResponse(data))
             self._connection.send(self.buildFrame(self.createCheckResponse(data)))
     
@@ -263,7 +271,7 @@ class WebConnection(threading.Thread):
         if (compareHashes(hashPayload, generateChecksum())):
             payload.extend('1'.encode('utf-8'))
         else:
-            payload.append('0'.encode('utf-8'))
+            payload.extend('0'.encode('utf-8'))
 
         return {
             'fin': 1,

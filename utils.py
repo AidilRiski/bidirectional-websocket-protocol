@@ -18,12 +18,3 @@ def generateChecksum():
 
 def compareHashes(hashClient, hashServer):
     return hashClient.lower() == hashServer.lower()
-
-def test():
-    test = bytearray()
-    test.extend('1'.encode('utf-8'))
-    print(test)
-
-# print(generateChecksum('A4A531314723D98E86945D683E703791', 'a4a531314723d98e86945d683e703791'))
-# print(compareHashes())
-test()
