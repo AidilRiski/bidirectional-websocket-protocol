@@ -6,7 +6,7 @@ from utils import *
 
 class WebConnection(threading.Thread):
     # Array of frames
-    data_array = []
+    dataArray = []
 
     def __init__(self, connection, sourceAddress):
         threading.Thread.__init__(self)
@@ -23,22 +23,35 @@ class WebConnection(threading.Thread):
         self._connection.send(bytes(self.getHandshakeResponse(handshakeRequest), 'utf-8'))
 
         while True:
-            data = self.parseFrame(self._connection.recv(FRAME_SIZE))
+            buffer = self._connection.recv(FRAME_SIZE)
+
+            # Check Validity of Received
+            rawOP = buffer[0] & 0x0f
+            if rawOP != PING and rawOP != CLOSE and rawOP != 1 and rawOP != 2:
+                continue
+
+            data = self.parseFrame(buffer)
             if not data:
                 break
             data['payload'] = self.unmaskPayload(data['mask'], data['payload'])
+
             # Handle multiple frames.
-            self.data_array.append(data)
-            print('Received', data)
+            self.dataArray.append(data)
+
+            dataToPrint = data.copy()
+            if len(dataToPrint['payload']) > 100:
+                dataToPrint['payload'] = 'TOO LONG TO PRINT'
+            print('Receiving', dataToPrint)
             if (data['opCode'] == PING):
                 # Send PONG Frame
-                self._connection.send(buildFrame(createPONGFrame(data)))
+                self._connection.send(self.buildFrame(self.createPONGFrame(data)))
             elif (data['opCode'] == CLOSE):
                 # Stop the connection
                 self._connection.send(self.buildFrame(self.createCloseFrame(data)))
                 self._connection.close()
                 break
             else:
+                print('Handling')
                 self.handleRequest(data)
 
     def parseHandshake(self, data):
@@ -168,9 +181,16 @@ class WebConnection(threading.Thread):
 
     def combineData(self):
         combinedPayload = bytearray()
-        for data in self.data_array:
-            combinedPayload.append(data['payload'])
+        for data in self.dataArray:
+            combinedPayload.extend(data['payload'])
         return combinedPayload
+    
+    def combineFrame(self):
+        combinedPayload = self.combineData()
+        bigFrame = self.dataArray[len(self.dataArray) - 1]
+        bigFrame['payload'] = combinedPayload
+        bigFrame['length'] = len(bigFrame['payload'])
+        return bigFrame
     
     # These are control frame functions:
     # All control frames MUST have a payload length of 125 bytes or less and MUST NOT be fragmented
@@ -200,22 +220,30 @@ class WebConnection(threading.Thread):
         return payload[0] == 0x21 and payload[1] == 0x63 and payload[2] == 0x68 and payload[3] == 0x65 and payload[4] == 0x63 and payload[5] == 0x6b
  
     def handleRequest(self, data):
+
+        if (not data['fin']):
+            return
+
+        bigFrame = self.combineFrame()
+        self.dataArray = []
         
-        if (self.isEchoRequest(data['payload'])):
+        if (self.isEchoRequest(bigFrame['payload'])):
+            toPrint = self.createEchoResponse(bigFrame)
+            if len(toPrint['payload']) > 100:
+                toPrint['payload'] = 'TOO LONG TO PRINT'
+            print('Respoding with frame', toPrint)
+            self._connection.send(self.buildFrame(self.createEchoResponse(bigFrame)))
 
-            print('Respoding with frame', self.createEchoResponse(data))
-            self._connection.send(self.buildFrame(self.createEchoResponse(data)))
-
-        elif (self.isSubmissionRequest(data['payload'])):
+        elif (self.isSubmissionRequest(bigFrame['payload'])):
 
             zipCurrentFiles()
             print('Respoding with frame', self.createSubmissionResponse())
             self._connection.send(self.buildFrame(self.createSubmissionResponse()))
 
-        elif (self.isCheckRequest(data['payload'])):
+        elif (self.isCheckRequest(bigFrame['payload'])):
 
-            print('Respoding with frame', self.createCheckResponse(data))
-            self._connection.send(self.buildFrame(self.createCheckResponse(data)))
+            print('Respoding with frame', self.createCheckResponse(bigFrame))
+            self._connection.send(self.buildFrame(self.createCheckResponse(bigFrame)))
     
     def createEchoResponse(self, data):
         
@@ -246,7 +274,6 @@ class WebConnection(threading.Thread):
                     break
                 payload.extend(byte)
         
-        # print(payload)
         return {
             'fin': 1,
             'opCode': 2,
@@ -267,7 +294,6 @@ class WebConnection(threading.Thread):
             hashPayload += str(chr(data['payload'][bytePointer]))
             bytePointer += 1
         
-        print(hashPayload)
         if (compareHashes(hashPayload, generateChecksum())):
             payload.extend('1'.encode('utf-8'))
         else:
