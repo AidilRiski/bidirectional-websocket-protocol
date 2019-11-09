@@ -1,9 +1,8 @@
-from constants import *
 from websocket import create_connection
 import os
 
 currentDirectory = os.getcwd()
-fileNamePath = currentDirectory + '/' + FILE_NAME + '.zip'
+fileNamePath = currentDirectory + '/' + 'Source' + '.zip'
 payload = bytearray()
 
 with open(fileNamePath, 'rb') as binary_file:
@@ -13,7 +12,7 @@ with open(fileNamePath, 'rb') as binary_file:
             break
         payload.extend(byte)
 
-url = "ws://localhost:" + str(PORT)
+url = "ws://localhost:" + str(65001)
 ws = create_connection(url)
 print("Sending...")
 ws.send(payload)

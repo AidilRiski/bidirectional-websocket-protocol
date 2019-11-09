@@ -1,8 +1,35 @@
 import base64
+import os
 import hashlib
 import threading
-from constants import *
-from utils import *
+
+FRAME_SIZE = 2**32 - 1
+
+# Control frames
+CLOSE = 8
+PING = 9
+PONG = 10
+
+FILE_NAME = 'Source'
+EXTENSION_NAME = 'zip'
+
+
+def generateChecksumFromFile():
+    currentDirectory = os.getcwd()
+    fileNamePath = currentDirectory + '/' + FILE_NAME + '.zip'
+    hash_md5 = hashlib.md5()
+    with open(fileNamePath, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def generateChecksumFromData(data):
+    hash_md5 = hashlib.md5()
+    hash_md5.update(data)
+    return hash_md5.hexdigest()
+
+def compareHashes(hashClient, hashServer):
+    return hashClient.lower() == hashServer.lower()
 
 class WebConnection(threading.Thread):
     # Array of frames
@@ -47,7 +74,7 @@ class WebConnection(threading.Thread):
             if len(dataToPrint['payload']) > 100:
                 dataToPrint['payload'] = 'TOO LONG TO PRINT, PROBABLY ...'
 
-            print('Receiving', dataToPrint)
+            print('Receiving', dataToPrint, 'On Thread ', self._threadNum)
             if (data['opCode'] == PING):
                 # Send PONG Frame
                 self._connection.send(self.buildFrame(self.createPONGFrame(data)))
@@ -58,7 +85,7 @@ class WebConnection(threading.Thread):
                 print('Exiting Thread ', self._threadNum)
                 break
             else:
-                print('Handling')
+                # print('Handling')
                 self.handleRequest(data)
 
     def parseHandshake(self, data):
@@ -231,27 +258,25 @@ class WebConnection(threading.Thread):
         if (data['fin'] == 0):
             return
 
-        # print('Data array: ', self._dataArray)
         bigFrame = self.combineFrame()
         self._dataArray = []
-        # print('Data array2: ', self._dataArray)
         
         if (self.isEchoRequest(bigFrame['payload'])):
             toPrint = self.createEchoResponse(bigFrame)
             if len(toPrint['payload']) > 100:
                 toPrint['payload'] = 'TOO LONG TO PRINT'
-            print('Respoding with frame', toPrint)
+            print('Respoding with frame', toPrint, 'On thread', self._threadNum)
             self._connection.send(self.buildFrame(self.createEchoResponse(bigFrame)))
 
         elif (self.isSubmissionRequest(bigFrame['payload'])):
 
-            zipCurrentFiles()
-            print('Respoding with frame FILE')
+            # zipCurrentFiles()
+            print('Respoding with frame FILE On Thread ', self._threadNum)
             self._connection.send(self.buildFrame(self.createSubmissionResponse()))
 
         else:
-
-            print('Respoding with frame', self.createHashResponse(bigFrame))
+            # print('BIG FRAME: ', bigFrame, 'On Thread ', self._threadNum)
+            print('Respoding with frame', self.createHashResponse(bigFrame), 'On Thread ', self._threadNum)
             self._connection.send(self.buildFrame(self.createHashResponse(bigFrame)))
     
     def createEchoResponse(self, data):
