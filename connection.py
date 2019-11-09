@@ -8,11 +8,12 @@ class WebConnection(threading.Thread):
     # Array of frames
     dataArray = []
 
-    def __init__(self, connection, sourceAddress):
+    def __init__(self, connection, sourceAddress, threadNum):
         threading.Thread.__init__(self)
-        print(threading.get_ident())
         self._connection = connection
         self._sourceAddress = sourceAddress
+        print('Entering thread', threadNum)
+        self._threadNum = threadNum
 
     def run(self):        
         data = self._connection.recv(FRAME_SIZE)
@@ -53,6 +54,7 @@ class WebConnection(threading.Thread):
                 # Stop the connection
                 self._connection.send(self.buildFrame(self.createCloseFrame(data)))
                 self._connection.close()
+                print('Exiting Thread ', self._threadNum)
                 break
             else:
                 print('Handling')
